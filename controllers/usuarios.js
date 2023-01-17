@@ -1,49 +1,75 @@
-const {response} = require('express');
+const bcryptjs = require('bcryptjs');
 
-const usuariosGet = (req, res = response) => {
+const Usuario = require('../models/usuario');
 
-  const {nombre = 'No Name', q, page = 1, limit} = req.query;
+
+const usuariosGet = async(req, res) => {
+
+  const {limite = 5, desde = 0} = req.query;
+
+  const [total, usuarios] = await Promise.all([
+    Usuario.countDocuments({estado: true}),
+    Usuario.find({estado: true})
+      .skip(desde)
+      .limit(limite)
+  ]);
 
   res.json({
-    msg: 'get API - controlador',
-    nombre,
-    q,
-    page,
-    limit
+    total,
+    usuarios
   });
 }
 
-const usuariosPost = (req, res = response) => {
+const usuariosPost = async (req, res) => {
 
-  const {nombre, edad} = req.body;
+  const { nombre, correo, password, rol } = req.body;
+  const usuario = new Usuario({ nombre, correo, password, rol });
+
+  //encriptar la contraseña
+  const salt = bcryptjs.genSaltSync();
+  usuario.password = bcryptjs.hashSync(password, salt);
+
+  //Guardar en DB
+  await usuario.save();
 
   res.status(201).json({
-    msg: 'post API - controlador',
-    nombre,
-    edad
+    usuario
   });
 }
 
-const usuariosPut = (req, res = response) => {
+const usuariosPut = async(req, res) => {
 
-  const id = req.params.id;
+  const { id } = req.params;
+  const { _id, password, google, correo, ...resto } = req.body;
+  
+  //validar con base de datos
+  if (password) {
+    //encriptar la contraseña
+    const salt = bcryptjs.genSaltSync();
+    resto.password = bcryptjs.hashSync(password, salt);
+  }
+  
+  const usuario = await Usuario.findByIdAndUpdate(id, resto, { returnOriginal: false });
 
-  res.status(400).json({
-    msg: 'put API - controlador',
-    id
-  });
+  res.json(usuario);
 }
 
-const usuariosPatch = (req, res = response) => {
+const usuariosPatch = (req, res) => {
   res.json({
     msg: 'patch API - controlador'
   });
 }
 
-const usuariosDelete = (req, res = response) => {
-  res.json({
-    msg: 'delete API - controlador'
-  });
+const usuariosDelete = async(req, res) => {
+
+  const {id} = req.params;
+
+  //Borrado fisico
+  //const usuario = await Usuario.findByIdAndDelete(id);
+
+  const usuario = await Usuario.findByIdAndUpdate(id, {estado: false}, {returnOriginal: false});
+
+  res.json(usuario);
 }
 
 module.exports = {
